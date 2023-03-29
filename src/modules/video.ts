@@ -47,7 +47,11 @@ export async function loadConfig() {
 }
 
 export async function saveConfig(c: any) {
-  videoConfig = deepmerge(videoConfig, c);
+  const { error, value } = configSchema.validate(c);
+  if (error) {
+    throw new Error(error.message);
+  }
+  videoConfig = deepmerge(videoConfig, value);
   await fs.promises.writeFile(VIDEO_CONFIG_PATH, JSON.stringify(videoConfig));
   return videoConfig;
 }
@@ -102,6 +106,6 @@ export async function start(clips: any) {
 
     return "ok";
   } catch (err) {
-    return (err as Error).message;
+    throw new Error(`Failed to create video: ${(err as Error).message}`);
   }
 }

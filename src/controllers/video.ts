@@ -5,31 +5,23 @@ export async function getConfig(req: Request, res: Response) {
   try {
     res.json(await video.loadConfig());
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json((err as Error).message);
   }
 }
 
 export async function setConfig(req: Request, res: Response) {
   try {
-    const newConfig = req.body;
-
-    const { error, value } = video.configSchema.validate(newConfig);
-    if (error) {
-      res.status(400).json({ error: error.details[0].message });
-      return;
-    }
-    res.json(await video.saveConfig(value));
+    const message = await video.saveConfig(req.body);
+    res.json(message);
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json((err as Error).message);
   }
 }
 
 export async function start(req: Request, res: Response) {
   try {
-    const { clips } = req.body;
-
-    res.json(await video.start(clips));
+    res.json(await video.start(req.body.clips));
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json((err as Error).message);
   }
 }
