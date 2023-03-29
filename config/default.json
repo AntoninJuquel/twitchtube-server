@@ -10,6 +10,9 @@
       "duration": 0.5,
       "type": "fade"
     },
-    "out": "out.mp4"
+    "out": "out.mp4",
+    "outPath": "",
+    "keepSourceAudio": true,
+    "allowRemoteRequests": true
   }
 }

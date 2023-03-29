@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import Twitch, { TwitchClipResponseBody } from "twitch-api-helix";
 
 import Joi from "joi";
-import dayjs from "dayjs";
 
 const twitchApi = new Twitch(
   process.env.TWITCH_CLIENT_ID as string,

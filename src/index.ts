@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 import { program } from "commander";
 
+import * as video from "./modules/video";
+
 dotenv.config();
 
 program
@@ -10,6 +12,8 @@ program
   .option("-e, --env <env>", "Environment to run in", "development")
   .action(async (options) => {
     process.env.NODE_ENV = options.env;
+
+    await video.init();
 
     const api = await import("./api");
     api.start();
