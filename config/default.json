@@ -1,0 +1,15 @@
+{
+  "api": {
+    "port": 3000
+  },
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "transition": {
+      "duration": 0.5,
+      "type": "fade"
+    },
+    "out": "out.mp4"
+  }
+}
