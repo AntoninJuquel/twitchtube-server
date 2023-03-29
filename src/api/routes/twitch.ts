@@ -4,10 +4,6 @@ import * as twitch from "../../controllers/twitch";
 
 const router = express.Router();
 
-router.get("/config", (req, res) => {
-  res.send("get config");
-});
-
 router.post("/config", (req, res) => {
   res.send("post config");
 });

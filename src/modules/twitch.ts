@@ -25,11 +25,9 @@ export async function getClips(params: any) {
   const { type, name, first, start, end, after, before } = value;
   switch (type) {
     case "game":
-      const game = await twitchApi.getGameByName(name);
-
-      if (!game) {
+      const [game] = await twitchApi.getGameByName(name).catch((err) => {
         throw new Error(`Game ${value.name} not found`);
-      }
+      });
 
       return await twitchApi.getClips({
         game_id: game.id,
@@ -40,10 +38,9 @@ export async function getClips(params: any) {
         before: before,
       });
     case "user":
-      const user = await twitchApi.getUserByName(name);
-      if (!user) {
-        throw new Error(`User ${name} not found`);
-      }
+      const [user] = await twitchApi.getUserByName(name).catch((err) => {
+        throw new Error(`User ${value.name} not found`);
+      });
 
       return await twitchApi.getClips({
         broadcaster_id: user.id,
