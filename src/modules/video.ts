@@ -1,5 +1,6 @@
 import fs, { readdirSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import config from "config";
 import * as drivelist from "drivelist";
 import deepmerge from "deepmerge";
@@ -118,7 +119,7 @@ type File = {
 };
 
 const DRIVES_PATH = "Computer";
-const drives = { id: DRIVES_PATH, name: DRIVES_PATH, isDirectory: true };
+const drives = { id: DRIVES_PATH, name: DRIVES_PATH, isDir: true };
 
 function listFiles(folder: string): File[] {
   const files: File[] = readdirSync(folder, {
@@ -133,20 +134,26 @@ function listFiles(folder: string): File[] {
   return files;
 }
 
-function getFolderChain(folder: string): File[] {
-  const { root, dir, base } = path.parse(folder);
-  const folderChain = path
-    .join(dir, base)
-    .split(path.sep)
-    .reduce<File[]>((acc, cur) => {
-      if (!cur) return acc;
-      const prev = acc[acc.length - 1];
-      const id = prev ? path.join(prev.id, cur) : root;
-      acc.push({ id, name: cur, isDir: true });
-      return acc;
-    }, []);
+function getFolderChain(inputPath: string): File[] {
+  const { root } = path.parse(inputPath);
 
-  return folderChain;
+  if (inputPath === root) {
+    return [
+      {
+        id: root,
+        name: root.split(path.sep)[0] || root,
+        isDir: true,
+      },
+    ];
+  }
+
+  return inputPath.split(path.sep).reduce<File[]>((acc, cur) => {
+    const prev = acc[acc.length - 1];
+    const id = prev ? path.join(prev.id, cur) : root;
+    if (prev && prev.id === id) return acc;
+    acc.push({ id, name: cur || id, isDir: true });
+    return acc;
+  }, []);
 }
 
 async function getDrives(): Promise<File[]> {
@@ -165,8 +172,12 @@ export async function open(folder: string = videoConfig.outPath) {
 
     const files =
       folder === DRIVES_PATH ? await getDrives() : listFiles(folder);
-    const folderChain =
-      folder === DRIVES_PATH ? [drives] : [drives, ...getFolderChain(folder)];
+    let folderChain =
+      folder === DRIVES_PATH ? [drives] : getFolderChain(folder);
+
+    if (os.platform() === "win32") {
+      folderChain = [drives, ...folderChain];
+    }
 
     return {
       files,
