@@ -1,6 +1,7 @@
-import fs from "node:fs";
+import fs, { readdirSync } from "node:fs";
 import path from "node:path";
 import config from "config";
+import * as drivelist from "drivelist";
 import deepmerge from "deepmerge";
 import type editly from "editly";
 import Joi from "joi";
@@ -14,7 +15,7 @@ type VideoConfig = {
   outPath: string;
   transition: {
     duration: number;
-    type: string;
+    name: string;
   };
   out: string;
   keepSourceAudio: boolean;
@@ -33,7 +34,7 @@ export const configSchema = Joi.object({
   outPath: Joi.string(),
   transition: Joi.object({
     duration: Joi.number().min(0).max(10000),
-    type: Joi.string(),
+    name: Joi.string(),
   }),
   out: Joi.string(),
   keepSourceAudio: Joi.boolean(),
@@ -96,7 +97,7 @@ export async function start(clips: any) {
       defaults: {
         transition: videoConfig.transition,
       },
-      keepSourceAudio: videoConfig.keepSourceAudio,
+      keepSourceAudio: true,
       allowRemoteRequests: videoConfig.allowRemoteRequests,
       clips,
     };
@@ -107,5 +108,72 @@ export async function start(clips: any) {
     return "ok";
   } catch (err) {
     throw new Error(`Failed to create video: ${(err as Error).message}`);
+  }
+}
+
+type File = {
+  id: string; // path
+  name: string;
+  isDir: boolean;
+};
+
+const DRIVES_PATH = "Computer";
+const drives = { id: DRIVES_PATH, name: DRIVES_PATH, isDirectory: true };
+
+function listFiles(folder: string): File[] {
+  const files: File[] = readdirSync(folder, {
+    withFileTypes: true,
+    encoding: "utf-8",
+  }).map((f) => ({
+    id: path.join(folder, f.name),
+    name: f.name,
+    isDir: f.isDirectory(),
+  }));
+
+  return files;
+}
+
+function getFolderChain(folder: string): File[] {
+  const { root, dir, base } = path.parse(folder);
+  const folderChain = path
+    .join(dir, base)
+    .split(path.sep)
+    .reduce<File[]>((acc, cur) => {
+      if (!cur) return acc;
+      const prev = acc[acc.length - 1];
+      const id = prev ? path.join(prev.id, cur) : root;
+      acc.push({ id, name: cur, isDir: true });
+      return acc;
+    }, []);
+
+  return folderChain;
+}
+
+async function getDrives(): Promise<File[]> {
+  const drives = (await drivelist.list()).map((d) => ({
+    id: d.mountpoints[0].path,
+    name: `${d.mountpoints[0].path.split(path.sep)[0]} ${d.description}`,
+    isDir: true,
+  }));
+
+  return drives;
+}
+
+export async function open(folder: string = videoConfig.outPath) {
+  try {
+    const sperator = path.sep;
+
+    const files =
+      folder === DRIVES_PATH ? await getDrives() : listFiles(folder);
+    const folderChain =
+      folder === DRIVES_PATH ? [drives] : [drives, ...getFolderChain(folder)];
+
+    return {
+      files,
+      folderChain,
+      sperator,
+    };
+  } catch (err) {
+    throw new Error(`Failed to open output folder: ${(err as Error).message}`);
   }
 }

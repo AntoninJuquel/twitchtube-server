@@ -10,4 +10,6 @@ router.post("/config", video.setConfig);
 
 router.post("/start", video.start);
 
+router.post("/open", video.open);
+
 export default router;

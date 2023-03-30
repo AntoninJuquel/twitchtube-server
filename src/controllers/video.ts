@@ -25,3 +25,11 @@ export async function start(req: Request, res: Response) {
     res.status(500).json((err as Error).message);
   }
 }
+
+export async function open(req: Request, res: Response) {
+  try {
+    res.json(await video.open(req.body.path));
+  } catch (err) {
+    res.status(500).json((err as Error).message);
+  }
+}
