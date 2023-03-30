@@ -103,32 +103,34 @@ const getEditly = async (): Promise<typeof editly> => {
 };
 
 async function downloadClips(clips: any[]) {
-  clips
-    .filter(
-      (clip) =>
-        clip.layers[0].type === "video" &&
-        clip.layers[0].path.includes("twitch.tv")
-    )
-    .map(async (clip) => {
-      const url = clip.layers[0].path;
-      const clipPath = path.join(
-        videoConfig.tempPath,
-        new URL(clip.layers[0].path).pathname.split("/").pop() as string
-      );
-      clip.layers[0].path = clipPath;
+  return Promise.all(
+    clips
+      .filter(
+        (clip) =>
+          clip.layers[0].type === "video" &&
+          clip.layers[0].path.includes("twitch.tv")
+      )
+      .map(async (clip) => {
+        const url = clip.layers[0].path;
+        const clipPath = path.join(
+          videoConfig.tempPath,
+          new URL(clip.layers[0].path).pathname.split("/").pop() as string
+        );
+        clip.layers[0].path = clipPath;
 
-      const { data, headers } = await axios.get(url, {
-        responseType: "stream",
-      });
+        const { data, headers } = await axios.get(url, {
+          responseType: "stream",
+        });
 
-      const writer = fs.createWriteStream(clipPath);
-      data.pipe(writer);
+        const writer = fs.createWriteStream(clipPath);
+        data.pipe(writer);
 
-      return new Promise((resolve, reject) => {
-        writer.on("finish", () => resolve(clipPath));
-        writer.on("error", reject);
-      });
-    });
+        return new Promise((resolve, reject) => {
+          writer.on("finish", () => resolve(clipPath));
+          writer.on("error", reject);
+        });
+      })
+  );
 }
 
 export async function start(clips: any) {
