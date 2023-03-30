@@ -7,7 +7,8 @@ import deepmerge from "deepmerge";
 import type editly from "editly";
 import Joi from "joi";
 
-import { VIDEO_CONFIG_PATH, DEFAULT_OUT_PATH } from "./globals";
+import { VIDEO_CONFIG_PATH, DEFAULT_OUT_PATH, TEMP_PATH } from "./globals";
+import axios from "axios";
 
 type VideoConfig = {
   width: number;
@@ -21,11 +22,13 @@ type VideoConfig = {
   out: string;
   keepSourceAudio: boolean;
   allowRemoteRequests: boolean;
+  tempPath: string;
 };
 
 let videoConfig: VideoConfig = {
   ...(config.get("video") as VideoConfig),
   outPath: DEFAULT_OUT_PATH,
+  tempPath: TEMP_PATH,
 };
 
 export const configSchema = Joi.object({
@@ -40,11 +43,12 @@ export const configSchema = Joi.object({
   out: Joi.string(),
   keepSourceAudio: Joi.boolean(),
   allowRemoteRequests: Joi.boolean(),
+  tempPath: Joi.string(),
 });
 
 export async function loadConfig() {
   const c = await fs.promises.readFile(VIDEO_CONFIG_PATH, "utf-8");
-  videoConfig = JSON.parse(c);
+  videoConfig = deepmerge(videoConfig, JSON.parse(c));
   return videoConfig;
 }
 
@@ -78,6 +82,16 @@ export async function init() {
     return;
   }
 
+  const outPathExists = fs.existsSync(DEFAULT_OUT_PATH);
+  if (!outPathExists) {
+    await fs.promises.mkdir(DEFAULT_OUT_PATH, { recursive: true });
+  }
+
+  const tmpPathExists = fs.existsSync(TEMP_PATH);
+  if (!tmpPathExists) {
+    await fs.promises.mkdir(TEMP_PATH, { recursive: true });
+  }
+
   videoConfig = await loadConfig();
 }
 
@@ -88,8 +102,38 @@ const getEditly = async (): Promise<typeof editly> => {
   return lib.default;
 };
 
+async function downloadClips(clips: any[]) {
+  clips
+    .filter(
+      (clip) =>
+        clip.layers[0].type === "video" &&
+        clip.layers[0].path.includes("twitch.tv")
+    )
+    .map(async (clip) => {
+      const url = clip.layers[0].path;
+      const clipPath = path.join(
+        TEMP_PATH,
+        new URL(clip.layers[0].path).pathname.split("/").pop() as string
+      );
+      clip.layers[0].path = clipPath;
+
+      const { data, headers } = await axios.get(url, {
+        responseType: "stream",
+      });
+
+      const writer = fs.createWriteStream(clipPath);
+      data.pipe(writer);
+
+      return new Promise((resolve, reject) => {
+        writer.on("finish", () => resolve(clipPath));
+        writer.on("error", reject);
+      });
+    });
+}
+
 export async function start(clips: any) {
   try {
+    await downloadClips(clips);
     const editlyConfig = {
       height: videoConfig.height,
       width: videoConfig.width,
@@ -187,4 +231,18 @@ export async function open(folder: string = videoConfig.outPath) {
   } catch (err) {
     throw new Error(`Failed to open output folder: ${(err as Error).message}`);
   }
+}
+
+export async function download() {
+  const outPath = path.join(videoConfig.outPath, videoConfig.out);
+  const stat = fs.statSync(outPath);
+  const stream = fs.createReadStream(outPath);
+  const filename = path.basename(outPath);
+
+  return {
+    filename,
+    size: stat.size,
+    type: "video/mp4",
+    stream,
+  };
 }

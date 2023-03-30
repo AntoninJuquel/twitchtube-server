@@ -20,7 +20,22 @@ export async function setConfig(req: Request, res: Response) {
 
 export async function start(req: Request, res: Response) {
   try {
-    res.json(await video.start(req.body.clips));
+    const message = await video.start(req.body.clips);
+    res.json(message);
+  } catch (err) {
+    res.status(500).json((err as Error).message);
+  }
+}
+
+export async function download(req: Request, res: Response) {
+  try {
+    const message = await video.download();
+    res.writeHead(200, {
+      "Content-Type": message.type,
+      "Content-Length": message.size,
+      "Content-Disposition": `attachment; filename=${message.filename}`,
+    });
+    message.stream.pipe(res);
   } catch (err) {
     res.status(500).json((err as Error).message);
   }

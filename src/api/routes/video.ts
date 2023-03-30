@@ -12,4 +12,6 @@ router.post("/start", video.start);
 
 router.post("/open", video.open);
 
+router.get("/download", video.download);
+
 export default router;

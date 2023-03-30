@@ -12,6 +12,7 @@
     },
     "out": "out.mp4",
     "outPath": "",
+    "tempPath": "",
     "keepSourceAudio": true,
     "allowRemoteRequests": true
   }
