@@ -112,7 +112,7 @@ async function downloadClips(clips: any[]) {
     .map(async (clip) => {
       const url = clip.layers[0].path;
       const clipPath = path.join(
-        TEMP_PATH,
+        videoConfig.tempPath,
         new URL(clip.layers[0].path).pathname.split("/").pop() as string
       );
       clip.layers[0].path = clipPath;
