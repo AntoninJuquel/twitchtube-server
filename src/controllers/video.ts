@@ -20,7 +20,7 @@ export async function setConfig(req: Request, res: Response) {
 
 export async function start(req: Request, res: Response) {
   try {
-    const message = await video.start(req.body.clips);
+    const message = await video.start(req.body.clips, (progress) => res.write(progress.toString()));
     res.json(message);
   } catch (err) {
     res.status(500).json((err as Error).message);

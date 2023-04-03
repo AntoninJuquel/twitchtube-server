@@ -4,8 +4,9 @@ import os from "node:os";
 import config from "config";
 import * as drivelist from "drivelist";
 import deepmerge from "deepmerge";
-import type editly from "editly";
 import Joi from "joi";
+
+import { getCompositions, renderMedia } from "@remotion/renderer";
 
 import { VIDEO_CONFIG_PATH, DEFAULT_OUT_PATH, TEMP_PATH } from "./globals";
 import axios from "axios";
@@ -95,13 +96,6 @@ export async function init() {
   videoConfig = await loadConfig();
 }
 
-const getEditly = async (): Promise<typeof editly> => {
-  const lib = await (eval(`import('editly')`) as Promise<{
-    default: typeof import("editly");
-  }>);
-  return lib.default;
-};
-
 async function downloadClips(clips: any[]) {
   return Promise.all(
     clips
@@ -133,24 +127,35 @@ async function downloadClips(clips: any[]) {
   );
 }
 
-export async function start(clips: any) {
+export async function start(
+  clips: any,
+  onProgress: (progress: number) => void
+) {
   try {
-    await downloadClips(clips);
-    const editlyConfig = {
+    const inputProps = {
       height: videoConfig.height,
       width: videoConfig.width,
       fps: videoConfig.fps,
       outPath: path.join(videoConfig.outPath, videoConfig.out),
-      defaults: {
-        transition: videoConfig.transition,
-      },
-      keepSourceAudio: true,
-      allowRemoteRequests: videoConfig.allowRemoteRequests,
       clips,
     };
+    const bundleLocation = path.resolve(__dirname, "..", "..", "remotion");
 
-    const Editly = await getEditly();
-    await Editly(editlyConfig);
+    const [composition] = await getCompositions(bundleLocation, {
+      inputProps,
+    });
+
+    console.log(`Rendering ${composition.id}...`);
+    await renderMedia({
+      codec: "h264",
+      composition,
+      serveUrl: bundleLocation,
+      outputLocation: path.join(videoConfig.outPath, videoConfig.out),
+      inputProps,
+      onProgress: (progress) => {
+        onProgress(progress.progress * 100);
+      },
+    });
 
     return "ok";
   } catch (err) {
