@@ -6,7 +6,12 @@ import * as drivelist from "drivelist";
 import deepmerge from "deepmerge";
 import Joi from "joi";
 
-import { getCompositions, renderMedia } from "@remotion/renderer";
+import {
+  RenderMediaOnProgress,
+  StitchingState,
+  getCompositions,
+  renderMedia,
+} from "@remotion/renderer";
 
 import { VIDEO_CONFIG_PATH, DEFAULT_OUT_PATH, TEMP_PATH } from "./globals";
 import axios from "axios";
@@ -24,6 +29,15 @@ type VideoConfig = {
   keepSourceAudio: boolean;
   allowRemoteRequests: boolean;
   tempPath: string;
+};
+
+type Progress = {
+  renderedFrames: number;
+  encodedFrames: number;
+  encodedDoneIn: number | null;
+  renderedDoneIn: number | null;
+  progress: number;
+  stitchStage: StitchingState;
 };
 
 let videoConfig: VideoConfig = {
@@ -129,7 +143,7 @@ async function downloadClips(clips: any[]) {
 
 export async function start(
   clips: any,
-  onProgress: (progress: number) => void
+  onProgress: (progress: Progress) => void
 ) {
   try {
     const inputProps = {
@@ -146,6 +160,14 @@ export async function start(
     });
 
     console.log(`Rendering ${composition.id}...`);
+    let prevProgress: Progress = {
+      renderedFrames: 0,
+      encodedFrames: 0,
+      encodedDoneIn: 0,
+      renderedDoneIn: 0,
+      progress: 0,
+      stitchStage: "encoding",
+    };
     await renderMedia({
       codec: "h264",
       composition,
@@ -153,7 +175,11 @@ export async function start(
       outputLocation: path.join(videoConfig.outPath, videoConfig.out),
       inputProps,
       onProgress: (progress) => {
-        onProgress(progress.progress * 100);
+        if (JSON.stringify(progress) === JSON.stringify(prevProgress)) {
+          return;
+        }
+        prevProgress = progress;
+        onProgress(progress);
       },
     });
 

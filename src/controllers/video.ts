@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as video from "../modules/video";
+import wss from "../api/websocket";
 
 export async function getConfig(req: Request, res: Response) {
   try {
@@ -20,7 +21,9 @@ export async function setConfig(req: Request, res: Response) {
 
 export async function start(req: Request, res: Response) {
   try {
-    const message = await video.start(req.body.clips, (progress) => res.write(progress.toString()));
+    const message = await video.start(req.body.clips, (progress) =>
+      wss.clients.forEach((client) => client.send(JSON.stringify(progress)))
+    );
     res.json(message);
   } catch (err) {
     res.status(500).json((err as Error).message);
