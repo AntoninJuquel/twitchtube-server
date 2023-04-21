@@ -23,26 +23,17 @@ exports.getBundleMode = getBundleMode;
 
 /***/ }),
 
-/***/ 3548:
+/***/ 6370:
 /***/ ((__unused_webpack_module, __unused_webpack___webpack_exports__, __webpack_require__) => {
 
 
 // EXTERNAL MODULE: ./node_modules/remotion/dist/cjs/index.js
 var cjs = __webpack_require__(7982);
-;// CONCATENATED MODULE: ./src/Composition.tsx
+;// CONCATENATED MODULE: ./src/remotion/Composition.tsx
 
 function VideoClip({ clip, from }) {
   const { fps } = (0,cjs.useVideoConfig)();
-  const slicePoint = clip.thumbnail_url.indexOf("-preview-");
-  const videoUrl = `${clip.thumbnail_url.slice(0, slicePoint)}.mp4`;
-  return /* @__PURE__ */ React.createElement(
-    cjs.Sequence,
-    {
-      from: Math.round(from) * fps,
-      durationInFrames: Math.round(clip.duration) * fps
-    },
-    /* @__PURE__ */ React.createElement(cjs.OffthreadVideo, { src: videoUrl })
-  );
+  return /* @__PURE__ */ React.createElement(cjs.Sequence, { from: Math.round(from) * fps, durationInFrames: Math.round(clip.duration) * fps }, /* @__PURE__ */ React.createElement(cjs.OffthreadVideo, { src: clip.videoUrl }));
 }
 function MyComp({ clips }) {
   return /* @__PURE__ */ React.createElement(React.Fragment, null, clips.map((clip, index) => /* @__PURE__ */ React.createElement(
@@ -55,16 +46,13 @@ function MyComp({ clips }) {
   )));
 }
 
-;// CONCATENATED MODULE: ./src/Root.tsx
+;// CONCATENATED MODULE: ./src/remotion/Root.tsx
 
 
 const inputProps = (0,cjs.getInputProps)();
 function MyVideo() {
   const { clips, fps, width, height } = inputProps;
-  const duration = clips.reduce(
-    (acc, clip) => acc + clip.duration,
-    0
-  );
+  const duration = clips.reduce((acc, clip) => acc + clip.duration, 0);
   return /* @__PURE__ */ React.createElement(
     cjs.Composition,
     {
@@ -78,7 +66,7 @@ function MyVideo() {
   );
 }
 
-;// CONCATENATED MODULE: ./src/index.ts
+;// CONCATENATED MODULE: ./src/remotion/index.ts
 
 
 (0,cjs.registerRoot)(MyVideo);
@@ -1130,6 +1118,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CompositionManagerProvider = exports.compositionsRef = exports.CompositionManager = void 0;
 const jsx_runtime_1 = __webpack_require__(5893);
 const react_1 = __importStar(__webpack_require__(7294));
+const shared_audio_tags_js_1 = __webpack_require__(3161);
 exports.CompositionManager = (0, react_1.createContext)({
     compositions: [],
     registerComposition: () => undefined,
@@ -1149,7 +1138,8 @@ exports.CompositionManager = (0, react_1.createContext)({
     currentCompositionMetadata: null,
 });
 exports.compositionsRef = react_1.default.createRef();
-const CompositionManagerProvider = ({ children }) => {
+const CompositionManagerProvider = ({ children, numberOfAudioTags }) => {
+    var _a;
     // Wontfix, expected to have
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [compositions, setCompositions] = (0, react_1.useState)([]);
@@ -1263,7 +1253,8 @@ const CompositionManagerProvider = ({ children }) => {
         unregisterFolder,
         currentCompositionMetadata,
     ]);
-    return ((0, jsx_runtime_1.jsx)(exports.CompositionManager.Provider, { value: contextValue, children: children }));
+    const composition = (_a = compositions.find((c) => c.id === currentComposition)) === null || _a === void 0 ? void 0 : _a.component;
+    return ((0, jsx_runtime_1.jsx)(exports.CompositionManager.Provider, { value: contextValue, children: (0, jsx_runtime_1.jsx)(shared_audio_tags_js_1.SharedAudioContextProvider, { numberOfAudioTags: numberOfAudioTags, component: composition !== null && composition !== void 0 ? composition : null, children: children }) }));
 };
 exports.CompositionManagerProvider = CompositionManagerProvider;
 
@@ -1358,47 +1349,84 @@ exports.Img = void 0;
 const jsx_runtime_1 = __webpack_require__(5893);
 const react_1 = __webpack_require__(7294);
 const delay_render_js_1 = __webpack_require__(2663);
-const get_environment_js_1 = __webpack_require__(934);
 const prefetch_js_1 = __webpack_require__(2595);
-const ImgRefForwarding = ({ onError, src, ...props }, ref) => {
+function exponentialBackoff(errorCount) {
+    return 1000 * 2 ** (errorCount - 1);
+}
+const ImgRefForwarding = ({ onError, maxRetries = 2, src, ...props }, ref) => {
     const imageRef = (0, react_1.useRef)(null);
-    const environment = (0, get_environment_js_1.useRemotionEnvironment)();
+    const errors = (0, react_1.useRef)({});
     (0, react_1.useImperativeHandle)(ref, () => {
         return imageRef.current;
     }, []);
     const actualSrc = (0, prefetch_js_1.usePreload)(src);
+    const retryIn = (0, react_1.useCallback)((timeout) => {
+        if (!imageRef.current) {
+            return;
+        }
+        const currentSrc = imageRef.current.src;
+        setTimeout(() => {
+            var _a;
+            if (!imageRef.current) {
+                // Component has been unmounted, do not retry
+                return;
+            }
+            const newSrc = (_a = imageRef.current) === null || _a === void 0 ? void 0 : _a.src;
+            if (newSrc !== currentSrc) {
+                // src has changed, do not retry
+                return;
+            }
+            imageRef.current.removeAttribute('src');
+            imageRef.current.setAttribute('src', newSrc);
+        }, timeout);
+    }, []);
     const didGetError = (0, react_1.useCallback)((e) => {
-        var _a;
-        if (onError) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        if (!errors.current) {
+            return;
+        }
+        errors.current[(_a = imageRef.current) === null || _a === void 0 ? void 0 : _a.src] =
+            ((_c = errors.current[(_b = imageRef.current) === null || _b === void 0 ? void 0 : _b.src]) !== null && _c !== void 0 ? _c : 0) + 1;
+        if (onError &&
+            ((_e = errors.current[(_d = imageRef.current) === null || _d === void 0 ? void 0 : _d.src]) !== null && _e !== void 0 ? _e : 0) > maxRetries) {
             onError(e);
+            return;
+        }
+        if (((_g = errors.current[(_f = imageRef.current) === null || _f === void 0 ? void 0 : _f.src]) !== null && _g !== void 0 ? _g : 0) <= maxRetries) {
+            const backoff = exponentialBackoff((_j = errors.current[(_h = imageRef.current) === null || _h === void 0 ? void 0 : _h.src]) !== null && _j !== void 0 ? _j : 0);
+            console.warn(`Could not load image with source ${(_k = imageRef.current) === null || _k === void 0 ? void 0 : _k.src}, retrying again in ${backoff}ms`);
+            retryIn(backoff);
+            return;
+        }
+        console.error('Error loading image with src:', (_l = imageRef.current) === null || _l === void 0 ? void 0 : _l.src, e, 'Handle the event using the onError() prop to make this message disappear.');
+    }, [maxRetries, onError, retryIn]);
+    (0, react_1.useLayoutEffect)(() => {
+        if (false) {}
+        const newHandle = (0, delay_render_js_1.delayRender)('Loading <Img> with src=' + src);
+        const { current } = imageRef;
+        const onComplete = () => {
+            var _a, _b, _c, _d;
+            if (((_b = errors.current[(_a = imageRef.current) === null || _a === void 0 ? void 0 : _a.src]) !== null && _b !== void 0 ? _b : 0) > 0) {
+                delete errors.current[(_c = imageRef.current) === null || _c === void 0 ? void 0 : _c.src];
+                console.info(`Retry successful - ${(_d = imageRef.current) === null || _d === void 0 ? void 0 : _d.src} is now loaded`);
+            }
+            (0, delay_render_js_1.continueRender)(newHandle);
+        };
+        const didLoad = () => {
+            onComplete();
+        };
+        if (current === null || current === void 0 ? void 0 : current.complete) {
+            onComplete();
         }
         else {
-            console.error('Error loading image with src:', (_a = imageRef.current) === null || _a === void 0 ? void 0 : _a.src, e, 'Handle the event using the onError() prop to make this message disappear.');
+            current === null || current === void 0 ? void 0 : current.addEventListener('load', didLoad, { once: true });
         }
-    }, [onError]);
-    // If image source switches, make new handle
-    if (environment === 'rendering') {
-        // eslint-disable-next-line react-hooks/rules-of-hooks
-        (0, react_1.useLayoutEffect)(() => {
-            if (false) {}
-            const newHandle = (0, delay_render_js_1.delayRender)('Loading <Img> with src=' + src);
-            const { current } = imageRef;
-            const didLoad = () => {
-                (0, delay_render_js_1.continueRender)(newHandle);
-            };
-            if (current === null || current === void 0 ? void 0 : current.complete) {
-                (0, delay_render_js_1.continueRender)(newHandle);
-            }
-            else {
-                current === null || current === void 0 ? void 0 : current.addEventListener('load', didLoad, { once: true });
-            }
-            // If tag gets unmounted, clear pending handles because image is not going to load
-            return () => {
-                current === null || current === void 0 ? void 0 : current.removeEventListener('load', didLoad);
-                (0, delay_render_js_1.continueRender)(newHandle);
-            };
-        }, [src]);
-    }
+        // If tag gets unmounted, clear pending handles because image is not going to load
+        return () => {
+            current === null || current === void 0 ? void 0 : current.removeEventListener('load', didLoad);
+            (0, delay_render_js_1.continueRender)(newHandle);
+        };
+    }, [src]);
     return ((0, jsx_runtime_1.jsx)("img", { ...props, ref: imageRef, src: actualSrc, onError: didGetError }));
 };
 /**
@@ -1486,7 +1514,6 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RemotionRoot = void 0;
 const jsx_runtime_1 = __webpack_require__(5893);
 const react_1 = __webpack_require__(7294);
-const shared_audio_tags_js_1 = __webpack_require__(3161);
 const CompositionManager_js_1 = __webpack_require__(4932);
 const delay_render_js_1 = __webpack_require__(2663);
 const NativeLayers_js_1 = __webpack_require__(2425);
@@ -1550,11 +1577,7 @@ const RemotionRoot = ({ children, numberOfAudioTags }) => {
             }
         }
     }, []);
-    return ((0, jsx_runtime_1.jsx)(nonce_js_1.NonceContext.Provider, { value: nonceContext, children: (0, jsx_runtime_1.jsx)(timeline_position_state_js_1.TimelineContext.Provider, { value: timelineContextValue, children: (0, jsx_runtime_1.jsx)(timeline_position_state_js_1.SetTimelineContext.Provider, { value: setTimelineContextValue, children: (0, jsx_runtime_1.jsx)(prefetch_state_js_1.PrefetchProvider, { children: (0, jsx_runtime_1.jsx)(NativeLayers_js_1.NativeLayersProvider, { children: (0, jsx_runtime_1.jsx)(CompositionManager_js_1.CompositionManagerProvider, { children: (0, jsx_runtime_1.jsx)(duration_state_js_1.DurationsContextProvider, { children: (0, jsx_runtime_1.jsx)(shared_audio_tags_js_1.SharedAudioContextProvider
-                                // In the preview, which is mostly played on Desktop, we opt out of the autoplay policy fix as described in https://github.com/remotion-dev/remotion/pull/554, as it mostly applies to mobile.
-                                , { 
-                                    // In the preview, which is mostly played on Desktop, we opt out of the autoplay policy fix as described in https://github.com/remotion-dev/remotion/pull/554, as it mostly applies to mobile.
-                                    numberOfAudioTags: numberOfAudioTags, children: children }) }) }) }) }) }) }) }));
+    return ((0, jsx_runtime_1.jsx)(nonce_js_1.NonceContext.Provider, { value: nonceContext, children: (0, jsx_runtime_1.jsx)(timeline_position_state_js_1.TimelineContext.Provider, { value: timelineContextValue, children: (0, jsx_runtime_1.jsx)(timeline_position_state_js_1.SetTimelineContext.Provider, { value: setTimelineContextValue, children: (0, jsx_runtime_1.jsx)(prefetch_state_js_1.PrefetchProvider, { children: (0, jsx_runtime_1.jsx)(NativeLayers_js_1.NativeLayersProvider, { children: (0, jsx_runtime_1.jsx)(CompositionManager_js_1.CompositionManagerProvider, { numberOfAudioTags: numberOfAudioTags, children: (0, jsx_runtime_1.jsx)(duration_state_js_1.DurationsContextProvider, { children: children }) }) }) }) }) }) }));
 };
 exports.RemotionRoot = RemotionRoot;
 
@@ -2127,7 +2150,7 @@ const didPropChange = (key, newProp, prevProp) => {
     return true;
 };
 exports.SharedAudioContext = (0, react_1.createContext)(null);
-const SharedAudioContextProvider = ({ children, numberOfAudioTags }) => {
+const SharedAudioContextProvider = ({ children, numberOfAudioTags, component }) => {
     const audios = (0, react_1.useRef)([]);
     const [initialNumberOfAudioTags] = (0, react_1.useState)(numberOfAudioTags);
     if (numberOfAudioTags !== initialNumberOfAudioTags) {
@@ -2244,6 +2267,22 @@ const SharedAudioContextProvider = ({ children, numberOfAudioTags }) => {
         unregisterAudio,
         updateAudio,
     ]);
+    // Fixing a bug: In React, if a component is unmounted using useInsertionEffect, then
+    // the cleanup function does sometimes not work properly. That is why when we
+    // are changing the composition, we reset the audio state.
+    // TODO: Possibly this does not save the problem completely, since the
+    // if an audio tag that is inside a sequence will also not be removed
+    // from the shared audios.
+    const resetAudio = (0, react_1.useCallback)(() => {
+        takenAudios.current = new Array(numberOfAudioTags).fill(false);
+        audios.current = [];
+        rerenderAudios();
+    }, [numberOfAudioTags, rerenderAudios]);
+    (0, react_1.useEffect)(() => {
+        return () => {
+            resetAudio();
+        };
+    }, [component, resetAudio]);
     return ((0, jsx_runtime_1.jsxs)(exports.SharedAudioContext.Provider, { value: value, children: [refs.map(({ id, ref }) => {
                 return (0, jsx_runtime_1.jsx)("audio", { ref: ref, src: EMPTY_AUDIO }, id);
             }), children] }));
@@ -3116,6 +3155,7 @@ const get_preview_dom_element_js_1 = __webpack_require__(3595);
 const is_player_js_1 = __webpack_require__(606);
 const portal_node_js_1 = __webpack_require__(1734);
 const prefetch_state_js_1 = __webpack_require__(5819);
+const prefetch_js_1 = __webpack_require__(2595);
 const register_root_js_1 = __webpack_require__(4440);
 const RemotionRoot_js_1 = __webpack_require__(7929);
 const SequenceContext_js_1 = __webpack_require__(3759);
@@ -3179,6 +3219,7 @@ exports.Internals = {
     useIsPlayer: is_player_js_1.useIsPlayer,
     useRemotionEnvironment: get_environment_js_1.useRemotionEnvironment,
     validateFrame: validate_frame_js_1.validateFrame,
+    usePreload: prefetch_js_1.usePreload,
 };
 
 
@@ -4658,6 +4699,20 @@ const staticFile = (path) => {
     if (path.startsWith('..') || path.startsWith('./')) {
         throw new TypeError(`staticFile() does not support relative paths - got "${path}". Instead, pass the name of a file that is inside the public/ folder. See: https://remotion.dev/docs/staticfile-relative-paths`);
     }
+    if (path.startsWith('/Users') ||
+        path.startsWith('/home') ||
+        path.startsWith('/tmp') ||
+        path.startsWith('/etc') ||
+        path.startsWith('/opt') ||
+        path.startsWith('/var') ||
+        path.startsWith('C:') ||
+        path.startsWith('D:') ||
+        path.startsWith('E:')) {
+        throw new TypeError(`staticFile() does not support absolute paths - got "${path}". Instead, pass the name of a file that is inside the public/ folder. See: https://remotion.dev/docs/staticfile-relative-paths`);
+    }
+    if (path.startsWith('public/')) {
+        throw new TypeError(`Do not include the public/ prefix when using staticFile() - got "${path}". See: https://remotion.dev/docs/staticfile-relative-paths`);
+    }
     const preparsed = inner(path);
     if (!preparsed.startsWith('/')) {
         return `/${preparsed}`;
@@ -4868,7 +4923,7 @@ const useMediaInTimeline = ({ volume, mediaVolume, mediaRef, src, mediaType, pla
         if (typeof volume === 'number') {
             return volume;
         }
-        return new Array(Math.max(0, duration + startsAt))
+        return new Array(Math.floor(Math.max(0, duration + startsAt)))
             .fill(true)
             .map((_, i) => {
             return (0, volume_prop_js_1.evaluateVolume)({
@@ -5497,7 +5552,7 @@ exports.validateSpringDuration = validateSpringDuration;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.VERSION = void 0;
 // Automatically generated on publish
-exports.VERSION = '3.3.80';
+exports.VERSION = '3.3.84';
 
 
 /***/ }),
@@ -6111,20 +6166,21 @@ const getMediaTime = ({ fps, frame, src, playbackRate, startFrom, mediaType, }) 
         playbackRate,
         startFrom,
     });
-    if (src.endsWith('webm')) {
-        // For WebM videos, we need to add a little bit of shift to get the right frame.
-        const msPerFrame = 1000 / fps;
-        const msShift = msPerFrame / 2;
-        return (expectedFrame * msPerFrame + msShift) / 1000;
-    }
-    if (mediaType === 'video') {
+    const isChrome = typeof window !== 'undefined' &&
+        window.navigator.userAgent.match(/Chrome\/([0-9]+)/);
+    if (isChrome &&
+        Number(isChrome[1]) < 112 &&
+        mediaType === 'video' &&
+        src.endsWith('.mp4')) {
         // In Chrome, for MP4s, if 30fps, the first frame is still displayed at 0.033333
         // even though after that it increases by 0.033333333 each.
         // So frame = 0 in Remotion is like frame = 1 for the browser
         return (expectedFrame + 1) / fps;
     }
-    // For audio, we don't do any shift correction
-    return expectedFrame / fps;
+    // For WebM videos, we need to add a little bit of shift to get the right frame.
+    const msPerFrame = 1000 / fps;
+    const msShift = msPerFrame / 2;
+    return (expectedFrame * msPerFrame + msShift) / 1000;
 };
 exports.getMediaTime = getMediaTime;
 
@@ -6531,7 +6587,7 @@ if (true) {
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
 /******/ 	__webpack_require__(2341);
-/******/ 	__webpack_require__(3548);
+/******/ 	__webpack_require__(6370);
 /******/ 	__webpack_require__(4896);
 /******/ 	// This entry module is referenced by other modules so it can't be inlined
 /******/ 	var __webpack_exports__ = __webpack_require__(3053);
