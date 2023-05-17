@@ -160,6 +160,9 @@ export async function start(
     });
 
     console.log(`Rendering ${composition.id}...`);
+
+    const outputLocation = path.join(videoConfig.outPath, videoConfig.out);
+
     let prevProgress: Progress = {
       renderedFrames: 0,
       encodedFrames: 0,
@@ -172,7 +175,7 @@ export async function start(
       codec: "h264",
       composition,
       serveUrl: bundleLocation,
-      outputLocation: path.join(videoConfig.outPath, videoConfig.out),
+      outputLocation,
       inputProps,
       onProgress: (progress) => {
         if (JSON.stringify(progress) === JSON.stringify(prevProgress)) {
@@ -182,6 +185,9 @@ export async function start(
         onProgress(progress);
       },
     });
+
+    console.log(`Rendered ${composition.id} successfully.`);
+    console.log(`Output is at ${outputLocation}`);
 
     return "ok";
   } catch (err) {
